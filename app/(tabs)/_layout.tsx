@@ -1,12 +1,10 @@
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet } from 'react-native';
 import { Colors } from '../../theme/colors';
-
-type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+import { Icon } from '../../components/Icon';
 
 interface TabIconProps {
-  name: IoniconsName;
+  name: string;
   color: string;
   size: number;
   focused: boolean;
@@ -17,11 +15,11 @@ function TabIcon({ name, color, size, focused, isCenter }: TabIconProps) {
   if (isCenter) {
     return (
       <View style={[styles.centerTabIcon, focused && styles.centerTabIconFocused]}>
-        <Ionicons name={name} size={size + 6} color={focused ? Colors.primary : '#888'} />
+        <Icon name={name} size={size + 6} color={focused ? Colors.primary : '#888'} />
       </View>
     );
   }
-  return <Ionicons name={name} size={size} color={color} />;
+  return <Icon name={name} size={size} color={color} />;
 }
 
 export default function TabLayout() {
@@ -40,7 +38,7 @@ export default function TabLayout() {
         options={{
           title: 'Drive',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="car-sport" color={color} size={size} focused={focused} />
+            <TabIcon name="car.side.fill" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -49,7 +47,7 @@ export default function TabLayout() {
         options={{
           title: 'Health',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="heart" color={color} size={size} focused={focused} />
+            <TabIcon name="heart.fill" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -58,7 +56,7 @@ export default function TabLayout() {
         options={{
           title: 'RovaPlay',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="play-circle" color={color} size={size} focused={focused} isCenter />
+            <TabIcon name="play.circle.fill" color={color} size={size} focused={focused} isCenter />
           ),
           tabBarLabelStyle: [styles.tabLabel, styles.centerTabLabel],
         }}
@@ -68,7 +66,7 @@ export default function TabLayout() {
         options={{
           title: 'Community',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="people" color={color} size={size} focused={focused} />
+            <TabIcon name="person.2.fill" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -77,7 +75,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="person" color={color} size={size} focused={focused} />
+            <TabIcon name="person.fill" color={color} size={size} focused={focused} />
           ),
         }}
       />
@@ -106,15 +104,15 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: '#0D1520',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: -10,
     borderWidth: 1.5,
-    borderColor: '#1A1A3E',
+    borderColor: '#1E2A3A',
   },
   centerTabIconFocused: {
-    backgroundColor: '#0A1830',
+    backgroundColor: '#0A1828',
     borderColor: Colors.primary,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 0 },

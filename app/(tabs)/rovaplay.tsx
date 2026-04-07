@@ -1,25 +1,85 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   Switch,
   Platform,
+  useWindowDimensions,
+  Animated,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Icon } from '../../components/Icon';
 import { Colors } from '../../theme/colors';
 import CyclingDashboard from '../../components/rovaplay/CyclingDashboard';
 import WidgetGrid from '../../components/rovaplay/WidgetGrid';
+import { useLocation } from '../../hooks/useLocation';
+import { widgets as defaultWidgets } from '../../constants/mockData';
 
 type Mode = 'customize' | 'cycling';
+type Widget = typeof defaultWidgets[number];
 
 export default function RovaPlayScreen() {
   const [mode, setMode] = useState<Mode>('customize');
+  const [activeWidgets, setActiveWidgets] = useState<Set<string>>(
+    new Set(['map', 'music', 'speed', 'battery', 'collision'])
+  );
+  const [orderedWidgets, setOrderedWidgets] = useState<Widget[]>(defaultWidgets);
 
+  const locationState = useLocation();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const isCycling = mode === 'cycling';
+
+  // Rotation prompt animation
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (isCycling && !isLandscape) {
+      // Phone icon rotates from portrait → landscape on loop
+      const rotation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(rotateAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+          Animated.delay(600),
+          Animated.timing(rotateAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+          Animated.delay(1000),
+        ])
+      );
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.1, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ])
+      );
+      rotation.start();
+      pulse.start();
+      return () => {
+        rotation.stop();
+        pulse.stop();
+        rotateAnim.setValue(0);
+        pulseAnim.setValue(1);
+      };
+    }
+  }, [isCycling, isLandscape]);
+
+  const phoneRotation = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '-90deg'],
+  });
+
+  const toggleWidget = (id: string) => {
+    setActiveWidgets(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -51,25 +111,41 @@ export default function RovaPlayScreen() {
 
       {/* Mode indicator strip */}
       <View style={[styles.modeStrip, isCycling ? styles.modeStripCycling : styles.modeStripCustomize]}>
-        <Ionicons
-          name={isCycling ? 'bicycle' : 'grid'}
+        <Icon
+          name={isCycling ? 'bicycle' : 'square.grid.2x2.fill'}
           size={13}
           color={isCycling ? Colors.primary : Colors.accent}
         />
         <Text style={[styles.modeStripText, { color: isCycling ? Colors.primary : Colors.accent }]}>
-          {isCycling ? 'Cycling Mode — Live Dashboard' : 'Customization Mode — Tap cards to toggle'}
+          {isCycling ? 'Cycling Mode — Live Dashboard' : 'Customization Mode — Hold & drag to reorder'}
         </Text>
       </View>
 
       {isCycling ? (
         /* ── CYCLING MODE ── */
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.cyclingContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <CyclingDashboard />
-        </ScrollView>
+        isLandscape ? (
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.cyclingContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <CyclingDashboard
+              activeWidgets={activeWidgets}
+              locationState={locationState}
+            />
+          </ScrollView>
+        ) : (
+          /* ── ROTATE PROMPT ── */
+          <View style={styles.rotationPrompt}>
+            <Animated.View style={{ transform: [{ rotate: phoneRotation }, { scale: pulseAnim }] }}>
+              <Icon name="iphone" size={72} color={Colors.textPrimary} />
+            </Animated.View>
+            <Text style={styles.rotationTitle}>Rotate your phone</Text>
+            <Text style={styles.rotationSubtitle}>
+              Cycling mode works in landscape
+            </Text>
+          </View>
+        )
       ) : (
         /* ── CUSTOMIZE MODE ── */
         <ScrollView
@@ -80,10 +156,15 @@ export default function RovaPlayScreen() {
           <View style={styles.customizeHeader}>
             <Text style={styles.customizeTitle}>Customize Your Dashboard</Text>
             <Text style={styles.customizeSubtitle}>
-              Choose which widgets appear during your ride
+              Tap to toggle · Hold and drag to reorder
             </Text>
           </View>
-          <WidgetGrid />
+          <WidgetGrid
+            activeWidgets={activeWidgets}
+            onToggle={toggleWidget}
+            orderedWidgets={orderedWidgets}
+            onReorder={setOrderedWidgets}
+          />
         </ScrollView>
       )}
     </SafeAreaView>
@@ -154,7 +235,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   modeStripCustomize: {
-    backgroundColor: '#0A2A20',
+    backgroundColor: '#0A1228',
     borderWidth: 1,
     borderColor: Colors.accent + '30',
   },
@@ -190,5 +271,26 @@ const styles = StyleSheet.create({
   customizeSubtitle: {
     color: Colors.textSecondary,
     fontSize: 13,
+  },
+  rotationPrompt: {
+    flex: 1,
+    backgroundColor: Colors.dark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    paddingHorizontal: 40,
+  },
+  rotationTitle: {
+    color: Colors.textPrimary,
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  rotationSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 15,
+    textAlign: 'center',
+    fontWeight: '400',
   },
 });

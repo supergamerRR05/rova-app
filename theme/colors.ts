@@ -1,13 +1,13 @@
 export const Colors = {
   primary: '#0066FF',
+  accent: '#38BDF8',       // light blue — accent only
+  alert: '#FF3B5C',        // red — warnings only
   dark: '#0A0A0F',
-  card: '#1A1A2E',
-  accent: '#00D4AA',
-  alert: '#FF3B5C',
+  card: '#111827',
   textPrimary: '#FFFFFF',
-  textSecondary: '#8888AA',
+  textSecondary: '#7A8BA8', // blue-grey
   tabBarActive: '#0066FF',
-  tabBarInactive: '#555555',
+  tabBarInactive: '#4A5568',
   tabBarBackground: '#0A0A0F',
-  border: '#2A2A3E',
+  border: '#1E2A3A',
 };
