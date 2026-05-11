@@ -12,8 +12,11 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { Colors } from '../../theme/colors';
 import { Icon } from '../../components/Icon';
 import CyclingDashboard from '../../components/rovaplay/CyclingDashboard';
+import CameraSettingsModal from '../../components/rovaplay/CameraSettingsModal';
 import WidgetGrid from '../../components/rovaplay/WidgetGrid';
 import { useLocation } from '../../hooks/useLocation';
+import { useBLE } from '../../hooks/useBLE';
+import { useESP32Camera } from '../../hooks/useESP32Camera';
 import { widgets as allWidgets } from '../../constants/mockData';
 
 export default function RovaPlayScreen() {
@@ -21,8 +24,11 @@ export default function RovaPlayScreen() {
     new Set(['speed', 'battery', 'map', 'music'])
   );
   const [isLandscape, setIsLandscape] = useState(false);
+  const [cameraModalVisible, setCameraModalVisible] = useState(false);
 
   const locationState = useLocation();
+  const bleData = useBLE();
+  const { cameraIp, streamUrl, isConnected: cameraConnected, saveIp } = useESP32Camera();
   const { width, height } = useWindowDimensions();
 
   // Always keep orientation unlocked — flipping the phone switches modes.
@@ -72,6 +78,16 @@ export default function RovaPlayScreen() {
         <CyclingDashboard
           selectedWidgets={selectedWidgets}
           locationState={locationState}
+          bleData={bleData}
+          cameraStreamUrl={streamUrl}
+          onCameraSettings={() => setCameraModalVisible(true)}
+        />
+        <CameraSettingsModal
+          visible={cameraModalVisible}
+          currentIp={cameraIp}
+          isConnected={cameraConnected}
+          onSave={saveIp}
+          onClose={() => setCameraModalVisible(false)}
         />
       </View>
     );

@@ -7,14 +7,15 @@ import {
   Animated,
   ActivityIndicator,
   Platform,
-  Image,
   useWindowDimensions,
 } from 'react-native';
 import Svg, { Circle, Line, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { WebView } from 'react-native-webview';
 import { Icon } from '../Icon';
 import { Colors } from '../../theme/colors';
 import { cyclingDefaults } from '../../constants/mockData';
 import type { LocationState } from '../../hooks/useLocation';
+import type { BLEData } from '../../hooks/useBLE';
 import { useWeather } from '../../hooks/useWeather';
 import Constants from 'expo-constants';
 
@@ -30,6 +31,9 @@ export type Widget = { id: string; label: string; icon: string };
 interface Props {
   selectedWidgets: Widget[];
   locationState: LocationState;
+  bleData?: BLEData;
+  cameraStreamUrl?: string | null;
+  onCameraSettings?: () => void;
   screenWidth?: number;
 }
 
@@ -188,18 +192,24 @@ const ss = StyleSheet.create({
 // ═══════════════════════════════════════════════════════════════════════════════
 // VARIATION A — CLEAN CLUSTER (minimal: speed + battery only)
 // ═══════════════════════════════════════════════════════════════════════════════
-function LayoutA() {
+function LayoutA({ speed, battery, bleConnected }: { speed: number; battery: number; bleConnected: boolean }) {
   return (
     <View style={[aStyles.root]}>
       <StatusStrip dim={A_DIM} fg={A_FG} accent={A_ACCENT} line={A_LINE} />
+      {bleConnected && (
+        <View style={{ position: 'absolute', top: 34, right: 12, flexDirection: 'row', alignItems: 'center', gap: 5, zIndex: 10 }}>
+          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: A_ACCENT }} />
+          <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 9, color: A_ACCENT, letterSpacing: 1 }}>BLE</Text>
+        </View>
+      )}
       <View style={aStyles.hero}>
         {/* Arc */}
         <View style={aStyles.arcWrap}>
-          <SpeedArc speed={cyclingDefaults.speed} size={210} stroke={11} gradId="arcA" />
+          <SpeedArc speed={speed} size={210} stroke={11} gradId="arcA" />
           <View style={StyleSheet.absoluteFill} pointerEvents="none">
             <View style={aStyles.arcCenter}>
               <Text style={aStyles.kmhLabel}>KM/H</Text>
-              <Text style={aStyles.speedNum}>{cyclingDefaults.speed}</Text>
+              <Text style={aStyles.speedNum}>{speed}</Text>
             </View>
           </View>
         </View>
@@ -219,15 +229,15 @@ function LayoutA() {
             ))}
           </View>
           <View style={aStyles.divider} />
-          <BatteryCellA />
+          <BatteryCellA battery={battery} />
         </View>
       </View>
     </View>
   );
 }
 
-function BatteryCellA() {
-  const { battery, range } = cyclingDefaults;
+function BatteryCellA({ battery }: { battery: number }) {
+  const { range } = cyclingDefaults;
   const color = battery > 50 ? A_ACCENT : battery > 20 ? A_WARN : '#FF5C7A';
   return (
     <View>
@@ -384,7 +394,7 @@ const pillSt = StyleSheet.create({
   text: { fontSize: 11, fontWeight: '600', letterSpacing: 0.4 },
 });
 
-function SpeedHUDC({ speed }: { speed: number }) {
+function SpeedHUDC({ speed, fromBle }: { speed: number; fromBle?: boolean }) {
   return (
     <GlassPanel style={cStyles.speedHUD} padding={14}>
       <View style={cStyles.speedHUDInner}>
@@ -410,8 +420,8 @@ function SpeedHUDC({ speed }: { speed: number }) {
   );
 }
 
-function BatteryHUDC() {
-  const { battery, range } = cyclingDefaults;
+function BatteryHUDC({ battery }: { battery: number }) {
+  const { range } = cyclingDefaults;
   return (
     <GlassPanel padding={12} style={cStyles.battHUD}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -580,15 +590,25 @@ function MapHeroC({ location }: { location: any }) {
 function LayoutC({
   ids,
   locationState,
+  bleData,
+  cameraStreamUrl,
+  onCameraSettings,
 }: {
   ids: Set<string>;
   locationState: LocationState;
+  bleData?: BLEData;
+  cameraStreamUrl?: string | null;
+  onCameraSettings?: () => void;
 }) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [collisionAlert, setCollisionAlert] = useState(false);
   const alertShake = useRef(new Animated.Value(0)).current;
 
   const weather = useWeather(locationState.location);
+
+  const speed = bleData?.speed ?? cyclingDefaults.speed;
+  const battery = bleData?.battery ?? cyclingDefaults.battery;
+  const bleConnected = bleData?.connected ?? false;
 
   const has = (id: string) => ids.has(id);
   const bg = has('map') ? 'map' : has('camera') ? 'camera' : 'speed';
@@ -614,11 +634,27 @@ function LayoutC({
       {/* ── Full-bleed background ── */}
       {bg === 'map' && <MapHeroC location={locationState.location} />}
       {bg === 'camera' && (
-        <Image
-          source={{ uri: 'https://picsum.photos/seed/rova-rear/900/500' }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-        />
+        cameraStreamUrl ? (
+          <WebView
+            style={StyleSheet.absoluteFill}
+            source={{ html: `<html><body style="margin:0;background:#000"><img src="${cameraStreamUrl}" style="width:100%;height:100%;object-fit:cover" /></body></html>` }}
+            scrollEnabled={false}
+            bounces={false}
+          />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: '#060C14' }]}>
+            <Icon name="camera.fill" size={32} color="rgba(255,255,255,0.2)" />
+            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 10 }}>No camera configured</Text>
+            {onCameraSettings && (
+              <TouchableOpacity
+                onPress={onCameraSettings}
+                style={{ marginTop: 14, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 8 }}
+              >
+                <Text style={{ color: '#4AF3D0', fontSize: 13, fontWeight: '600' }}>Set up camera</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )
       )}
       {bg === 'speed' && <SpeedHeroBgC />}
 
@@ -627,9 +663,20 @@ function LayoutC({
 
       {/* ── Top bar ── */}
       <View style={cStyles.topBar}>
-        <View style={pillSt.root}>
-          <View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: C_ACCENT, marginRight: 6 }]} />
-          <Text style={[pillSt.text, { color: C_ACCENT }]}>RIDE · 00:42:18</Text>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <View style={pillSt.root}>
+            <View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: C_ACCENT, marginRight: 6 }]} />
+            <Text style={[pillSt.text, { color: C_ACCENT }]}>RIDE · 00:42:18</Text>
+          </View>
+          <View style={[pillSt.root, { borderColor: bleConnected ? 'rgba(74,243,208,0.4)' : C_BORDER }]}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: bleConnected ? C_ACCENT : '#555', marginRight: 6 }} />
+            <Text style={[pillSt.text, { color: bleConnected ? C_ACCENT : 'rgba(255,255,255,0.35)' }]}>BLE</Text>
+          </View>
+          {bg === 'camera' && onCameraSettings && (
+            <TouchableOpacity onPress={onCameraSettings} style={pillSt.root}>
+              <Icon name="gear" size={11} color={C_DIM} />
+            </TouchableOpacity>
+          )}
         </View>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           {has('weather') && weather && <WeatherHUDC weather={weather} />}
@@ -645,7 +692,7 @@ function LayoutC({
         <View style={cStyles.speedHeroCenter}>
           <View style={{ width: 260, height: 260 }}>
             <SpeedArc
-              speed={cyclingDefaults.speed}
+              speed={speed}
               size={260}
               stroke={14}
               gradId="arcCHero"
@@ -657,7 +704,7 @@ function LayoutC({
               ]}
             >
               <Text style={cStyles.heroKmh}>KM/H</Text>
-              <Text style={cStyles.heroSpeed}>{cyclingDefaults.speed}</Text>
+              <Text style={cStyles.heroSpeed}>{speed}</Text>
             </View>
           </View>
           <View style={{ gap: 14, marginLeft: 12 }}>
@@ -676,7 +723,7 @@ function LayoutC({
       )}
 
       {/* ── Camera live tag ── */}
-      {bg === 'camera' && (
+      {bg === 'camera' && cameraStreamUrl && (
         <View style={cStyles.camTag}>
           <View style={[pillSt.root, { borderColor: 'rgba(255,59,92,0.5)' }]}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF3B5C', marginRight: 6 }} />
@@ -688,15 +735,15 @@ function LayoutC({
       {/* ── Bottom-left: speed + battery ── */}
       {bg !== 'speed' && (
         <View style={cStyles.bottomLeft}>
-          <SpeedHUDC speed={cyclingDefaults.speed} />
-          <BatteryHUDC />
+          <SpeedHUDC speed={speed} fromBle={bleConnected} />
+          <BatteryHUDC battery={battery} />
         </View>
       )}
 
       {/* When speed is hero, battery sits bottom-left */}
       {bg === 'speed' && (
         <View style={cStyles.bottomLeft}>
-          <BatteryHUDC />
+          <BatteryHUDC battery={battery} />
         </View>
       )}
 
@@ -941,8 +988,12 @@ const darkMapStyle = [
 // ═══════════════════════════════════════════════════════════════════════════════
 // Main export — decides which layout to render
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function CyclingDashboard({ selectedWidgets, locationState }: Props) {
+export default function CyclingDashboard({ selectedWidgets, locationState, bleData, cameraStreamUrl, onCameraSettings }: Props) {
   const ids = new Set(selectedWidgets.map(w => w.id));
+
+  const speed = bleData?.speed ?? cyclingDefaults.speed;
+  const battery = bleData?.battery ?? cyclingDefaults.battery;
+  const bleConnected = bleData?.connected ?? false;
 
   // Variation A: minimal (only speed + battery selected, nothing else)
   const isMinimal =
@@ -965,6 +1016,6 @@ export default function CyclingDashboard({ selectedWidgets, locationState }: Pro
     );
   }
 
-  if (isMinimal) return <LayoutA />;
-  return <LayoutC ids={ids} locationState={locationState} />;
+  if (isMinimal) return <LayoutA speed={speed} battery={battery} bleConnected={bleConnected} />;
+  return <LayoutC ids={ids} locationState={locationState} bleData={bleData} cameraStreamUrl={cameraStreamUrl} onCameraSettings={onCameraSettings} />;
 }
