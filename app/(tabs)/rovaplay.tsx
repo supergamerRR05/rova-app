@@ -1,177 +1,131 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
-  Switch,
   Platform,
   useWindowDimensions,
-  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Icon } from '../../components/Icon';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { Colors } from '../../theme/colors';
+import { Icon } from '../../components/Icon';
 import CyclingDashboard from '../../components/rovaplay/CyclingDashboard';
 import WidgetGrid from '../../components/rovaplay/WidgetGrid';
 import { useLocation } from '../../hooks/useLocation';
-import { widgets as defaultWidgets } from '../../constants/mockData';
-
-type Mode = 'customize' | 'cycling';
-type Widget = typeof defaultWidgets[number];
+import { widgets as allWidgets } from '../../constants/mockData';
 
 export default function RovaPlayScreen() {
-  const [mode, setMode] = useState<Mode>('customize');
   const [activeWidgets, setActiveWidgets] = useState<Set<string>>(
-    new Set(['map', 'music', 'speed', 'battery', 'collision'])
+    new Set(['speed', 'battery', 'map', 'music'])
   );
-  const [orderedWidgets, setOrderedWidgets] = useState<Widget[]>(defaultWidgets);
+  const [isLandscape, setIsLandscape] = useState(false);
 
   const locationState = useLocation();
   const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
-  const isCycling = mode === 'cycling';
 
-  // Rotation prompt animation
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
+  // Always keep orientation unlocked — flipping the phone switches modes.
   useEffect(() => {
-    if (isCycling && !isLandscape) {
-      // Phone icon rotates from portrait → landscape on loop
-      const rotation = Animated.loop(
-        Animated.sequence([
-          Animated.timing(rotateAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
-          Animated.delay(600),
-          Animated.timing(rotateAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
-          Animated.delay(1000),
-        ])
-      );
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.1, duration: 600, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-        ])
-      );
-      rotation.start();
-      pulse.start();
-      return () => {
-        rotation.stop();
-        pulse.stop();
-        rotateAnim.setValue(0);
-        pulseAnim.setValue(1);
-      };
-    }
-  }, [isCycling, isLandscape]);
+    ScreenOrientation.unlockAsync();
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    };
+  }, []);
 
-  const phoneRotation = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '-90deg'],
-  });
+  // Track real orientation changes.
+  useEffect(() => {
+    const sync = async () => {
+      const o = await ScreenOrientation.getOrientationAsync();
+      setIsLandscape(
+        o === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
+        o === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
+      );
+    };
+    sync();
+    const sub = ScreenOrientation.addOrientationChangeListener(({ orientationInfo }) => {
+      setIsLandscape(
+        orientationInfo.orientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
+        orientationInfo.orientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
+      );
+    });
+    return () => ScreenOrientation.removeOrientationChangeListener(sub);
+  }, []);
+
+  // Dimension fallback (simulator / locked-orientation environments).
+  const effectiveLandscape = isLandscape || width > height;
 
   const toggleWidget = (id: string) => {
     setActiveWidgets(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   };
 
+  const selectedWidgets = allWidgets.filter(w => activeWidgets.has(w.id));
+
+  // ── LANDSCAPE / RIDE MODE — full screen, no chrome ───────────────────────
+  if (effectiveLandscape) {
+    return (
+      <View style={styles.fullscreen}>
+        <CyclingDashboard
+          selectedWidgets={selectedWidgets}
+          locationState={locationState}
+        />
+      </View>
+    );
+  }
+
+  // ── PORTRAIT / GALLERY MODE ───────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.appName}>Rova</Text>
-          <View style={styles.playBadge}>
-            <Text style={styles.playBadgeText}>PLAY</Text>
-          </View>
-        </View>
-        <View style={styles.modeToggleContainer}>
-          <Text style={[styles.modeLabel, !isCycling && styles.modeLabelActive]}>
-            Customize
-          </Text>
-          <Switch
-            value={isCycling}
-            onValueChange={(val) => setMode(val ? 'cycling' : 'customize')}
-            trackColor={{ false: '#2A2A3E', true: Colors.primary + '55' }}
-            thumbColor={isCycling ? Colors.primary : '#666'}
-            ios_backgroundColor="#2A2A3E"
-            style={styles.switch}
-          />
-          <Text style={[styles.modeLabel, isCycling && styles.modeLabelActive]}>
-            Cycling
-          </Text>
+        <Text style={styles.appName}>Rova</Text>
+        <View style={styles.playBadge}>
+          <Text style={styles.playBadgeText}>PLAY</Text>
         </View>
       </View>
 
-      {/* Mode indicator strip */}
-      <View style={[styles.modeStrip, isCycling ? styles.modeStripCycling : styles.modeStripCustomize]}>
-        <Icon
-          name={isCycling ? 'bicycle' : 'square.grid.2x2.fill'}
-          size={13}
-          color={isCycling ? Colors.primary : Colors.accent}
-        />
-        <Text style={[styles.modeStripText, { color: isCycling ? Colors.primary : Colors.accent }]}>
-          {isCycling ? 'Cycling Mode — Live Dashboard' : 'Customization Mode — Hold & drag to reorder'}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.galleryContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Section heading */}
+        <Text style={styles.sectionLabel}>ROVAPLAY</Text>
+        <Text style={styles.galleryTitle}>Choose your{'\n'}widgets.</Text>
+        <Text style={styles.gallerySubtitle}>
+          <Text style={styles.countHighlight}>{activeWidgets.size}</Text>
+          {` of ${allWidgets.length} selected · arranges automatically`}
         </Text>
-      </View>
 
-      {isCycling ? (
-        /* ── CYCLING MODE ── */
-        isLandscape ? (
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.cyclingContent}
-            showsVerticalScrollIndicator={false}
-          >
-            <CyclingDashboard
-              activeWidgets={activeWidgets}
-              locationState={locationState}
-            />
-          </ScrollView>
-        ) : (
-          /* ── ROTATE PROMPT ── */
-          <View style={styles.rotationPrompt}>
-            <Animated.View style={{ transform: [{ rotate: phoneRotation }, { scale: pulseAnim }] }}>
-              <Icon name="iphone" size={72} color={Colors.textPrimary} />
-            </Animated.View>
-            <Text style={styles.rotationTitle}>Rotate your phone</Text>
-            <Text style={styles.rotationSubtitle}>
-              Cycling mode works in landscape
-            </Text>
+        <WidgetGrid
+          activeWidgets={activeWidgets}
+          onToggle={toggleWidget}
+          widgets={allWidgets}
+        />
+
+        {/* Rotate to ride — sits below the grid so it doesn't eat into widget space */}
+        <View style={styles.ctaContainer}>
+          <View style={styles.ctaPill}>
+            <Icon name="bicycle" size={14} color={Colors.textSecondary} />
+            <Text style={styles.ctaText}>Rotate to ride</Text>
           </View>
-        )
-      ) : (
-        /* ── CUSTOMIZE MODE ── */
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.customizeContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.customizeHeader}>
-            <Text style={styles.customizeTitle}>Customize Your Dashboard</Text>
-            <Text style={styles.customizeSubtitle}>
-              Tap to toggle · Hold and drag to reorder
-            </Text>
-          </View>
-          <WidgetGrid
-            activeWidgets={activeWidgets}
-            onToggle={toggleWidget}
-            orderedWidgets={orderedWidgets}
-            onReorder={setOrderedWidgets}
-          />
-        </ScrollView>
-      )}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+const ACCENT = '#7DD3FC';
+
 const styles = StyleSheet.create({
+  fullscreen: {
+    flex: 1,
+    backgroundColor: '#050709',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: Colors.dark,
@@ -179,14 +133,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 16 : 8,
     paddingBottom: 12,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
   },
   appName: {
@@ -207,90 +156,62 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1,
   },
-  modeToggleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  modeLabel: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  modeLabelActive: {
-    color: Colors.textPrimary,
-    fontWeight: '700',
-  },
-  switch: {
-    transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }],
-  },
-  modeStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  modeStripCustomize: {
-    backgroundColor: '#0A1228',
-    borderWidth: 1,
-    borderColor: Colors.accent + '30',
-  },
-  modeStripCycling: {
-    backgroundColor: '#0A1830',
-    borderWidth: 1,
-    borderColor: Colors.primary + '30',
-  },
-  modeStripText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
   scrollView: {
     flex: 1,
   },
-  customizeContent: {
+  galleryContent: {
     paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingBottom: 16,
   },
-  cyclingContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  customizeHeader: {
-    marginBottom: 20,
-  },
-  customizeTitle: {
-    color: Colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  customizeSubtitle: {
+  sectionLabel: {
     color: Colors.textSecondary,
-    fontSize: 13,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
   },
-  rotationPrompt: {
-    flex: 1,
-    backgroundColor: Colors.dark,
+  galleryTitle: {
+    color: Colors.textPrimary,
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    lineHeight: 38,
+    marginBottom: 8,
+  },
+  gallerySubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    marginBottom: 24,
+  },
+  countHighlight: {
+    color: ACCENT,
+    fontWeight: '700',
+  },
+  gridSpacing: {
+    gap: 0,
+  },
+  // Sticky CTA
+  ctaContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-    paddingHorizontal: 40,
   },
-  rotationTitle: {
-    color: Colors.textPrimary,
-    fontSize: 24,
-    fontWeight: '700',
-    textAlign: 'center',
-    letterSpacing: -0.5,
+  ctaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#151C28',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#1E2A3A',
   },
-  rotationSubtitle: {
+  ctaText: {
     color: Colors.textSecondary,
-    fontSize: 15,
-    textAlign: 'center',
-    fontWeight: '400',
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.2,
   },
 });

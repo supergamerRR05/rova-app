@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { Colors } from '../../theme/colors';
 import { Icon } from '../../components/Icon';
 
@@ -23,11 +23,14 @@ function TabIcon({ name, color, size, focused, isCenter }: TabIconProps) {
 }
 
 export default function TabLayout() {
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: isLandscape ? { display: 'none' } : styles.tabBar,
         tabBarActiveTintColor: Colors.tabBarActive,
         tabBarInactiveTintColor: Colors.tabBarInactive,
         tabBarLabelStyle: styles.tabLabel,
