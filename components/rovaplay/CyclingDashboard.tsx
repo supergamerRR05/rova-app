@@ -22,9 +22,8 @@ import Constants from 'expo-constants';
 const canRenderMap =
   Platform.OS !== 'web' && Constants.executionEnvironment !== 'storeClient';
 const MapView = canRenderMap ? require('react-native-maps').default : null;
-const PROVIDER_DEFAULT = canRenderMap
-  ? require('react-native-maps').PROVIDER_DEFAULT
-  : null;
+const PROVIDER_DEFAULT = canRenderMap ? require('react-native-maps').PROVIDER_DEFAULT : null;
+const PROVIDER_GOOGLE = canRenderMap ? require('react-native-maps').PROVIDER_GOOGLE : null;
 
 export type Widget = { id: string; label: string; icon: string };
 
@@ -570,7 +569,7 @@ function MapHeroC({ location }: { location: any }) {
   return (
     <MapView
       style={StyleSheet.absoluteFill}
-      provider={PROVIDER_DEFAULT}
+      provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
       region={{
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
